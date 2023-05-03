@@ -5,9 +5,14 @@
 
 #include "base/vertex.h"
 #include "tiny_obj_loader.h"
+
 #include "scene_and_shading.h"
 
-const std::string modelRelPath = "../media/AA12_Shotgun.obj";
+const std::string modelRelPath = "obj/AA12_Shotgun.obj";
+//天空盒贴图地址
+const std::vector<std::string> skyboxTextureRelPaths = {
+    "texture/skybox/Right_Tex.jpg", "texture/skybox/Left_Tex.jpg",  "texture/skybox/Up_Tex.jpg",
+    "texture/skybox/Down_Tex.jpg",  "texture/skybox/Front_Tex.jpg", "texture/skybox/Back_Tex.jpg"};
 
 scene_and_shading::scene_and_shading(const Options& options) : Application(options) {
     
@@ -79,6 +84,11 @@ scene_and_shading::scene_and_shading(const Options& options) : Application(optio
     _input.mouse.move.yNow = _input.mouse.move.yOld = 0.5f * _windowHeight;
     glfwSetCursorPos(_window, _input.mouse.move.xNow, _input.mouse.move.yNow);
 
+    std::vector<std::string> skyboxTextureFullPaths;
+    for (size_t i = 0; i < skyboxTextureRelPaths.size(); ++i) {
+        skyboxTextureFullPaths.push_back(getAssetFullPath(skyboxTextureRelPaths[i]));
+    }
+    _skybox.reset(new SkyBox(skyboxTextureFullPaths));
     // init cameras
     _cameras.resize(2);
 
@@ -92,9 +102,9 @@ scene_and_shading::scene_and_shading(const Options& options) : Application(optio
     _cameras[0]->transform.position = glm::vec3(0.0f, 0.0f, 15.0f);
 
     // orthographic camera
-    _cameras[1].reset(
-        new OrthographicCamera(-4.0f * aspect, 4.0f * aspect, -4.0f, 4.0f, znear, zfar));
-    _cameras[1]->transform.position = glm::vec3(0.0f, 0.0f, 15.0f);
+    // _cameras[1].reset(
+    //     new OrthographicCamera(-4.0f * aspect, 4.0f * aspect, -4.0f, 4.0f, znear, zfar));
+    // _cameras[1]->transform.position = glm::vec3(0.0f, 0.0f, 15.0f);
 
     // init model
     _rifle.reset(new Model(getAssetFullPath(modelRelPath)));
@@ -114,19 +124,47 @@ void scene_and_shading::handleInput() {
         return;
     }
 
-    // 缩放功能（暂时废弃）
-    // if (_input.keyboard.keyStates[GLFW_KEY_SPACE] == GLFW_PRESS) {
-    //     std::cout << "switch camera" << std::endl;
-    //     // switch camera
-    //     activeCameraIndex = (activeCameraIndex + 1) % _cameras.size();
-    //     _input.keyboard.keyStates[GLFW_KEY_SPACE] = GLFW_RELEASE;
-    //     return;
-    // }
+   
 
     static Camera* camera = _cameras[activeCameraIndex].get();
     static glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
     static float yaw = 0.0f;
     static float pitch = 0.0f;
+    glm::vec3 forward = camera->transform.getFront();
+    //切换第三人称视角
+    if (_input.keyboard.keyStates[GLFW_KEY_F5] == GLFW_PRESS) {
+        // std::cout << "switch camera F5" << std::endl;
+        if (third_camera && Scope == 0) {
+            camera->transform.position += 100.0f * forward;
+            // std::cout << "-------" << std::endl;
+            third_camera = false;
+        }
+        else if (third_camera == 0 && Scope == 0) {
+            camera->transform.position -= 100.0f * forward;
+            // std::cout << "+++++++" << std::endl;
+            third_camera = true;
+        }
+        _input.keyboard.keyStates[GLFW_KEY_F5] = GLFW_RELEASE;
+        return;
+    }
+
+    //开镜
+    if (_input.mouse.press.right == 1) {
+        // std::cout << "开镜"<<_input.mouse.press.right << std::endl;
+        if (Scope && third_camera == 0)
+        {
+            camera->transform.position -= 100.0f * forward;
+            // std::cout << "-------" << std::endl;
+            Scope = false;
+        }
+        else if (Scope == 0 && third_camera == 0)
+        {
+            camera->transform.position += 100.0f * forward;
+            // std::cout << "+++++++" << std::endl;
+            Scope = true;
+        }
+        _input.mouse.press.right=0;
+    }
     // 取得任意时刻相机的前、右、上方向的单位向量
     glm::vec3 forwardDirection = glm::normalize(camera->transform.getFront());
     glm::vec3 rightDirection = glm::normalize(camera->transform.getRight());
@@ -157,7 +195,7 @@ void scene_and_shading::handleInput() {
     newFront.y = sin(glm::radians(pitch));
     newFront.z = cos(glm::radians(pitch)) * sin(glm::radians(yaw));
     camera->transform.lookAt(camera->transform.position-glm::normalize(newFront), up);
-    std::cout<<newFront.x<<" "<<newFront.y<<" "<<newFront.z<<std::endl;
+    // std::cout<<newFront.x<<" "<<newFront.y<<" "<<newFront.z<<std::endl;
 
     // 将WASD操作限定在xOz平面内
     glm::vec3 plainForwardDirection = glm::normalize(glm::vec3(forwardDirection.x, 0.0f, forwardDirection.z));
@@ -212,12 +250,12 @@ void scene_and_shading::renderFrame() {
 
     glm::mat4 projection = _cameras[activeCameraIndex]->getProjectionMatrix();
     glm::mat4 view = _cameras[activeCameraIndex]->getViewMatrix();
-
+    _skybox->draw(projection, view);
     _shader->use();
     _shader->setUniformMat4("projection", projection);
     _shader->setUniformMat4("view", view);
     _shader->setUniformMat4("model", _rifle->transform.getLocalMatrix());
-
+    
     _rifle->draw();
 }
 
