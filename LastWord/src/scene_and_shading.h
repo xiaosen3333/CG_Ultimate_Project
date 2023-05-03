@@ -9,6 +9,8 @@
 #include "base/glsl_program.h"
 #include "base/model.h" // 把model.h重写?
 #include "rifle.h"
+#include "base/skybox.h"
+#include "base/texture2d.h"
 
 class scene_and_shading : public Application {
 public:
@@ -23,6 +25,10 @@ public:
 private:
     std::vector<std::unique_ptr<Camera>> _cameras;
     
+    bool third_camera = false;
+
+    bool Scope = false;
+
     int activeCameraIndex = 0;
 
     std::unique_ptr<Model> _rifle; 
@@ -30,6 +36,8 @@ private:
     std::unique_ptr<GLSLProgram> _shader;
 
     void initShader();
+
+    std::unique_ptr<SkyBox> _skybox;
 
 // -------------------------------------------------------------------------------
 
